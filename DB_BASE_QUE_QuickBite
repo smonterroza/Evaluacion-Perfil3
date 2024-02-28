@@ -1,0 +1,332 @@
+DROP DATABASE if exists QuickBite;
+CREATE DATABASE QuickBite;
+USE QuickBite;
+
+
+CREATE TABLE clientes(
+  cliente_id CHAR (36) DEFAULT(UUID()) PRIMARY KEY,
+  nombre_cliente VARCHAR (20) NOT NULL,
+  apellido_cliente VARCHAR (20) NOT NULL,
+  telefono INT NOT NULL,
+  direccion VARCHAR(30) NOT NULL,
+  CONSTRAINT CHK_Clientes_Telefono CHECK (telefono >= 1000000 AND telefono <= 9999999999)
+);
+
+CREATE TABLE empleados(
+  empleado_id CHAR (36) DEFAULT (UUID()) PRIMARY KEY,
+  nombre_empleado VARCHAR (20) NOT NULL,
+  apellido_empleado VARCHAR (20) NOT NULL,
+  cargo VARCHAR(20) NOT NULL,
+  salario DECIMAL(10,2) NOT NULL,
+  CONSTRAINT CHK_empleados_salario CHECK (salario > 0)
+);
+
+CREATE TABLE pedidos (
+  pedidos_id CHAR(36) DEFAULT(UUID()) PRIMARY KEY,
+  cliente_id CHAR(36),
+  fecha_pedido DATE DEFAULT CURRENT_DATE NOT NULL,
+  total DECIMAL(10,2) NOT NULL,
+  estado VARCHAR(20) NOT NULL,
+  empleado_id CHAR(36),
+  CONSTRAINT FK_pedidos_clientes FOREIGN KEY (cliente_id) REFERENCES clientes(cliente_id),
+  CONSTRAINT FK_pedidos_empleados FOREIGN KEY (empleado_id) REFERENCES empleados(empleado_id),
+  CONSTRAINT CHK_pedidos_total CHECK (total > 0)
+);
+
+CREATE TABLE productos(
+  producto_id CHAR (36) DEFAULT (UUID()) PRIMARY KEY,
+  nombre_producto VARCHAR (20) NOT NULL,
+  descripcion VARCHAR (40) NOT NULL,
+  precio DECIMAL(10,2) NOT NULL,
+  existencias INT NOT NULL,
+  CONSTRAINT CHK_Productos_Precio_productos CHECK (precio > 0),
+  CONSTRAINT CHK_Productos_Existencias_productos CHECK (existencias > 0)
+);
+
+CREATE TABLE detalles_pedidos (
+  detalle_id CHAR (36) DEFAULT (UUID()) PRIMARY KEY,
+  pedidos_id CHAR(36),
+  producto_id CHAR(36),
+  cantidad INT NOT NULL,
+  precio_unitario DECIMAL(10,2) NOT NULL,
+  sub_total DECIMAL (10,2) NOT NULL,
+  CONSTRAINT FK_detalles_pedidos_pedidos FOREIGN KEY (pedidos_id) REFERENCES pedidos(pedidos_id),
+  CONSTRAINT FK_detalles_pedidos_productos FOREIGN KEY (producto_id) REFERENCES productos(producto_id),
+  CONSTRAINT CHK_Precio_pedidos CHECK (precio_unitario > 0),
+	CONSTRAINT CHK_Subtotal_pedidos CHECK (sub_total > 0),
+  CONSTRAINT CHK_Existencias_pedidos CHECK (cantidad > 0)
+);
+
+-- ------------------------------------------
+
+DROP PROCEDURE IF EXISTS InsertarEmpleados;
+
+DELIMITER //
+CREATE PROCEDURE InsertarEmpleados(
+    IN nombre_empleado_val VARCHAR(20),
+    IN apellido_empleado_val VARCHAR(20),
+    IN cargo_val VARCHAR(20),
+    IN salario_val DECIMAL(10,2)
+)
+BEGIN
+  INSERT INTO empleados (nombre_empleado, apellido_empleado, cargo, salario) VALUES
+  (nombre_empleado_val, apellido_empleado_val, cargo_val, salario_val);
+END//
+DELIMITER ;
+
+
+-- ------------------------------------------------------------------------------------------
+DROP PROCEDURE IF EXISTS InsertarClientes;
+
+DELIMITER //
+CREATE PROCEDURE InsertarClientes(
+  IN nombre_cliente_val VARCHAR(20),
+  IN apellido_cliente_val VARCHAR(20),
+  IN telefono_val INT,
+  IN direccion_val VARCHAR(30)
+)
+BEGIN
+    INSERT INTO clientes (nombre_cliente, apellido_cliente, telefono, direccion) VALUES 
+    (nombre_cliente_val, apellido_cliente_val, telefono_val, direccion_val);
+    
+END //
+DELIMITER ;
+
+-- ---------------------------------------------------------------------------------
+
+DROP PROCEDURE IF EXISTS InsertarPedidos;
+
+DELIMITER //
+CREATE PROCEDURE InsertarPedidos(
+  IN cliente_id_val CHAR(36),
+  IN empleado_id_val CHAR(36),
+  IN total_val DECIMAL(10,2),
+  IN estado_val VARCHAR(20)
+)
+BEGIN
+  DECLARE cliente_id_val_temp CHAR(36);
+  DECLARE empleado_id_val_temp CHAR(36);
+
+  IF cliente_id_val IS NULL THEN
+    SELECT cliente_id INTO cliente_id_val_temp FROM clientes ORDER BY RAND() LIMIT 1;
+  ELSE
+    SET cliente_id_val_temp = cliente_id_val;
+  END IF;
+
+  IF empleado_id_val IS NULL THEN
+    SELECT empleado_id INTO empleado_id_val_temp FROM empleados ORDER BY RAND() LIMIT 1;
+  ELSE
+    SET empleado_id_val_temp = empleado_id_val;
+  END IF;
+
+  INSERT INTO pedidos (cliente_id, total, estado, empleado_id) VALUES
+  (cliente_id_val_temp, total_val, estado_val, empleado_id_val_temp);
+  
+END //
+DELIMITER ;
+
+
+-- --------------------------------------
+DROP PROCEDURE IF EXISTS InsertarProductos;
+
+DELIMITER //
+CREATE PROCEDURE InsertarProductos(
+  IN nombre_producto_val VARCHAR(20),
+  IN descripcion_val VARCHAR(40),
+  IN precio_val DECIMAL(10,2),
+  IN existencias_val INT
+)
+BEGIN
+  INSERT INTO productos (nombre_producto, descripcion, precio, existencias) VALUES
+    (nombre_producto_val, descripcion_val, precio_val, existencias_val);
+
+END//
+DELIMITER ;
+
+-- -------------------------------------------------------
+DROP PROCEDURE IF EXISTS InsertarDetallesPedidos;
+
+DELIMITER //
+CREATE PROCEDURE InsertarDetallesPedidos(
+
+  IN pedidos_id_val CHAR(36),
+  IN producto_id_val CHAR(36),
+  IN cantidad_val INT,
+  IN precio_val DECIMAL(10,2)
+  
+)
+BEGIN 
+
+	DECLARE id_pedidos_val_temp CHAR(36);
+    DECLARE id_producto_val_temp CHAR(36);
+    
+    DECLARE subtotal DECIMAL (10,2);
+
+    IF pedidos_id_val IS NULL THEN
+    SELECT pedidos_id INTO id_pedidos_val_temp FROM pedidos LIMIT 1;
+    ELSE
+    SET id_pedidos_val_temp = pedidos_id_val;
+    END IF;
+
+    IF producto_id_val IS NULL THEN 
+    SELECT producto_id INTO id_producto_val_temp FROM productos LIMIT 1;
+    ELSE
+    SET id_producto_val_temp = producto_id_val;
+    END IF;
+    
+    SET subtotal = cantidad_val * precio_val;
+
+  INSERT INTO detalles_pedidos (pedidos_id, producto_id, cantidad, precio_unitario, sub_total) VALUES
+  (id_pedidos_val_temp, id_producto_val_temp, cantidad_val, precio_val, subtotal);
+ 
+END//
+DELIMITER ;
+
+-- -----------------------------------------------------------------------
+
+CALL InsertarEmpleados('John', 'Doe', 'Manager', '50000');
+CALL InsertarEmpleados('Jane', 'Smith', 'Crew Member', '25000');
+CALL InsertarEmpleados('Michael', 'Johnson', 'Crew Member', '25000');
+CALL InsertarEmpleados('Emily', 'Brown', 'Crew Member', '25000');
+CALL InsertarEmpleados('David', 'Davis', 'Crew Member', '25000');
+CALL InsertarEmpleados('Sarah', 'Miller', 'Crew Member', '25000');
+CALL InsertarEmpleados('Daniel', 'Wilson', 'Crew Member', '25000');
+CALL InsertarEmpleados('Olivia', 'Moore', 'Crew Member', '25000');
+CALL InsertarEmpleados('Andrew', 'Taylor', 'Crew Member', '25000');
+CALL InsertarEmpleados('Sophia', 'Anderson', 'Crew Member', '25000');
+CALL InsertarEmpleados('Matthew', 'Thomas', 'Crew Member', '25000');
+CALL InsertarEmpleados('Ava', 'Jackson', 'Crew Member', '25000');
+CALL InsertarEmpleados('Emma', 'White', 'Crew Member', '25000');
+CALL InsertarEmpleados('Christopher', 'Harris', 'Crew Member', '25000');
+CALL InsertarEmpleados('Isabella', 'Clark', 'Crew Member', '25000');
+
+CALL InsertarClientes('Juan', 'Perez', '12345678', 'Calle 1');
+CALL InsertarClientes('Maria', 'Gomez', '87654321', 'Avenida 2');
+CALL InsertarClientes('Pedro', 'Lopez', '45678912', 'Carrera 3');
+CALL InsertarClientes('Ana', 'Rodriguez', '98765432', 'Calle 4');
+CALL InsertarClientes('Luis', 'Hernandez', '21436587', 'Avenida 5');
+CALL InsertarClientes('Laura', 'Torres', '65872143', 'Carrera 6');
+CALL InsertarClientes('Carlos', 'Garcia', '32145698', 'Calle 7');
+CALL InsertarClientes('Sofia', 'Vargas', '89654321', 'Avenida 8');
+CALL InsertarClientes('Jorge', 'Rojas', '65478912', 'Carrera 9');
+CALL InsertarClientes('Fernanda', 'Sanchez', '43219876', 'Calle 10');
+CALL InsertarClientes('Andres', 'Mendoza', '98765432', 'Avenida 11');
+CALL InsertarClientes('Valentina', 'Ortega', '74125896', 'Carrera 12');
+CALL InsertarClientes('Gabriel', 'Cruz', '36985214', 'Calle 13');
+CALL InsertarClientes('Paola', 'Gonzalez', '25896314', 'Avenida 14');
+CALL InsertarClientes('Ricardo', 'Silva', '95175386', 'Carrera 15');
+
+
+CALL InsertarPedidos(NULL, NULL, 100, 'Enviado');
+CALL InsertarPedidos(NULL, NULL, 200, 'Enviado');
+CALL InsertarPedidos(NULL, NULL, 300, 'Enviado');
+CALL InsertarPedidos(NULL, NULL, 400, 'Enviado');
+CALL InsertarPedidos(NULL, NULL, 500, 'Enviado');
+CALL InsertarPedidos(NULL, NULL, 600, 'Enviado');
+CALL InsertarPedidos(NULL, NULL, 700, 'Enviado');
+CALL InsertarPedidos(NULL, NULL, 800, 'Enviado');
+CALL InsertarPedidos(NULL, NULL, 900, 'Enviado');
+CALL InsertarPedidos(NULL, NULL, 1000, 'Enviado');
+CALL InsertarPedidos(NULL, NULL, 1100, 'Enviado');
+CALL InsertarPedidos(NULL, NULL, 1200, 'Enviado');
+CALL InsertarPedidos(NULL, NULL, 1300, 'Enviado');
+CALL InsertarPedidos(NULL, NULL, 1400, 'Enviado');
+CALL InsertarPedidos(NULL, NULL, 1500, 'Enviado');
+CALL InsertarPedidos(NULL, NULL, 1600, 'Enviado');  
+
+CALL InsertarProductos('Hamburguesa', 'Hamburguesa de carne', '5', '15');
+CALL InsertarProductos('Papas Fritas', 'Papas fritas crujientes', '2', '12');
+CALL InsertarProductos('Refresco', 'Refresco de cola', '2.5', '18');
+CALL InsertarProductos('Nuggets', 'Nuggets de pollo', '4', '10');
+CALL InsertarProductos('Helado', 'Helado de vainilla', '3', '20');
+CALL InsertarProductos('Ensalada', 'Ensalada fresca', '5.5', '14');
+CALL InsertarProductos('Hot Dog', 'Hot Dog clásico', '3.5', '16');
+CALL InsertarProductos('Café', 'Café caliente', '2.5', '11');
+CALL InsertarProductos('Pizza', 'Pizza de pepperoni', '6', '13');
+CALL InsertarProductos('Taco', 'Taco de carne asada', '4.5', '17');
+CALL InsertarProductos('Pollo Frito', 'Pollo frito crujiente', '5', '20');
+CALL InsertarProductos('Sushi', 'Sushi variado', '8', '15');
+CALL InsertarProductos('Burrito', 'Burrito de frijoles', '4', '12');
+CALL InsertarProductos('Sándwich', 'Sándwich de jamón y queso', '3.5', '19');
+CALL InsertarProductos('Donas', 'Donas surtidas', '2', '10');
+
+
+CALL InsertarDetallesPedidos(NULL, NULL, 10, 10.50);
+CALL InsertarDetallesPedidos(NULL, NULL, 20, 20.50);
+CALL InsertarDetallesPedidos(NULL, NULL, 30, 30.50);
+CALL InsertarDetallesPedidos(NULL, NULL, 40, 40.50);
+CALL InsertarDetallesPedidos(NULL, NULL, 10, 10.50);
+CALL InsertarDetallesPedidos(NULL, NULL, 20, 20.50);
+CALL InsertarDetallesPedidos(NULL, NULL, 30, 30.50);
+CALL InsertarDetallesPedidos(NULL, NULL, 40, 40.50);
+CALL InsertarDetallesPedidos(NULL, NULL, 10, 10.50);
+CALL InsertarDetallesPedidos(NULL, NULL, 20, 20.50);
+CALL InsertarDetallesPedidos(NULL, NULL, 30, 30.50);
+CALL InsertarDetallesPedidos(NULL, NULL, 40, 40.50);
+CALL InsertarDetallesPedidos(NULL, NULL, 10, 10.50);
+CALL InsertarDetallesPedidos(NULL, NULL, 20, 20.50);
+CALL InsertarDetallesPedidos(NULL, NULL, 30, 30.50);
+CALL InsertarDetallesPedidos(NULL, NULL, 40, 40.50);
+  
+  
+  
+-- trigger-------------------------------------------------------------------
+
+-- Se debe de crear un trigger que descuente automáticamente las existencias de un
+-- producto cuando este sea comprado.
+
+DELIMITER // 
+CREATE TRIGGER descuento_existencias 
+AFTER INSERT ON detalles_pedidos 
+FOR EACH ROW BEGIN DECLARE cantidad_comprada INT; 
+DECLARE producto_existencias INT;  
+SELECT NEW.cantidad, existencias INTO cantidad_comprada, producto_existencias FROM productos WHERE producto_id = NEW.producto_id; 
+SET producto_existencias = producto_existencias - cantidad_comprada; 
+UPDATE productos SET existencias = producto_existencias WHERE producto_id = NEW.producto_id; END // DELIMITER ;
+
+-- paso 1 seleccione todas estas lineas
+	-- SELECT * FROM productos limit 1;
+    -- identifique por la cantidad de existencias que hay del primer producto y mantenga presente el numero
+	-- SELECT pedidos_id FROM pedidos LIMIT 1;
+	-- SELECT producto_id FROM productos LIMIT 1;
+-- paso 1//
+    
+-- paso 2 
+    -- luego copie y pegue el id de pedidos y peguelo en el primer registro a insertar 
+    -- luego copie y pegue el id de productos y peguelo en el segundo registro a insertar 
+		
+	-- CALL InsertarDetallesPedidos ('aca6b9d4-d67e-11ee-a297-387a0e5c3b17', 'acaa6044-d67e-11ee-a297-387a0e5c3b17', 2, 10.50);
+-- paso 2//
+
+
+-- paso 3
+  -- ahora verifique si ha cambiado la cantidad y se ha restado cantidad ingresada en detalles de pedidos
+  -- SELECT * FROM productos limit 1;
+
+-- paso 3 //
+-- -------------------------------------------------------------------
+
+-- funcion que cuenta  cuantos usuarios hay de tipo administrador.
+DROP FUNCTION IF EXISTS cantidad_clientes;
+DELIMITER //
+
+CREATE FUNCTION cantidad_clientes() RETURNS INT
+BEGIN
+  DECLARE count INT;
+  SELECT COUNT(*) INTO count FROM clientes;
+  RETURN count;
+END//
+
+DELIMITER ;
+
+
+	SELECT * FROM clientes;
+    SELECT * FROM productos;
+    SELECT * FROM empleados;
+    SELECT * FROM detalles_pedidos;
+    SELECT * FROM pedidos;
+
+ 
+
+
+
